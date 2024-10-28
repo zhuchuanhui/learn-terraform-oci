@@ -28,3 +28,4 @@ resource "oci_core_subnet" "dev" {
   dns_label                   = "dev"
 }
 
+
