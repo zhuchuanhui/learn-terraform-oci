@@ -28,23 +28,23 @@ resource "oci_core_subnet" "dev" {
   vcn_id                      = oci_core_vcn.internal.id
   cidr_block                  = "172.16.0.0/24"
   # tenancy_ocid                = var.tenancy_ocid
-  compartment_id              = var.compartment_id 
+  compartment_id              = var.compartment_id
   display_name                = "Dev subnet 1"
   prohibit_public_ip_on_vnic  = true
   dns_label                   = "dev"
 }
 
-resource "oci_core_instance" "existing_instance" {
+resource "oci_core_instance" "existing_instance" { #ARM device
   compartment_id   = var.compartment_id
   # インポート後に情報がここに挿入されます
 }
 
-resource "oci_core_instance" "existing_instance1" {
+resource "oci_core_instance" "existing_instance1" { #AMD device1
   compartment_id   = var.compartment_id
   # インポート後に情報がここに挿入されます
 }
 
-resource "oci_core_instance" "existing_instance2" {
+resource "oci_core_instance" "existing_instance2" { #AMD device2
   compartment_id   = var.compartment_id
   # インポート後に情報がここに挿入されます
 }
