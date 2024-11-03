@@ -17,7 +17,7 @@ variable "region" {
 variable "availability_domain" {
   description = "region where you have OCI tenancy"
   type        = string
-  default     = "ZXGQ:AP-OSAKA-1-AD-1"
+  default     = "ap-osaka-1"
 }
 
 variable "user_ocid" {
