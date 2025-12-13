@@ -1,43 +1,62 @@
 # =============================================================================
-# instance.tf
-# 目的: 管理対象のOCIリソース（VCN、Subnet、2台の既存インスタンス）を定義
-# 内容: インポート済みの既存リソースをTerraformで管理するための設定
-# 注意: source_id はOCIコンソールから取得したイメージOCIDに置き換えてください
+# instance.tf - ファイアウォール構成（最終完全版 - CIDRエラー解消済み）
+# ・VCN CIDR: 10.0.0.0/16
+# ・パブリックSubnet: 10.0.0.0/24
+# ・内部Subnet1: 10.1.0.0/24
+# ・内部Subnet2: 10.2.0.0/24
+# ・ARMインスタンスをFWとして使用（3つのVNIC）
 # =============================================================================
 
-# 既存のVCN（インポート済み）
-resource "oci_core_virtual_network" "vcn_test1" {
+# VCN（メインVCN）
+resource "oci_core_virtual_network" "vcn_fw_main" {
   compartment_id = var.compartment_id
   cidr_block     = "10.0.0.0/16"
-  display_name   = "vcn-20251213-test1"
-  dns_label      = "vcn02292221"
-
-  defined_tags = {
-    "Oracle-Tags.CreatedBy" = "default/syudenky@gmail.com"
-    "Oracle-Tags.CreatedOn" = "2024-02-29T13:21:45.300Z"
-  }
+  display_name   = "vcn-fw-main-20251214"
+  dns_label      = "vcfwmain"
 }
 
-# 既存のSubnet（コンソールと完全に一致させる）
-resource "oci_core_subnet" "dev" {
+# パブリックSubnet（外部向け）
+resource "oci_core_subnet" "subnet_public" {
   compartment_id             = var.compartment_id
-  vcn_id                     = oci_core_virtual_network.vcn_test1.id
+  vcn_id                     = oci_core_virtual_network.vcn_fw_main.id
   cidr_block                 = "10.0.0.0/24"
-  display_name               = "subnet-20240229-ubuntu22-test1"  # コンソール一致
-  dns_label                  = "subnet02292221"                  # コンソール一致
+  display_name               = "subnet-public"
+  dns_label                  = "public"
   prohibit_public_ip_on_vnic = false
 }
 
-# 1台目: ARMインスタンス（Ampere A1 Flex）
-resource "oci_core_instance" "existing_instance" {
+# 内部Subnet1（10.3.0.0/24）
+resource "oci_core_subnet" "subnet_internal_1" {
+  compartment_id             = var.compartment_id
+  vcn_id                     = oci_core_virtual_network.vcn_fw_main.id
+    ipv4cidr_blocks            = ["10.0.1.0/24"]
+  display_name               = "subnet-internal-1"
+  dns_label                  = "internal1"
+  prohibit_public_ip_on_vnic = true
+}
+
+# 内部Subnet2（10.4.0.0/24）
+resource "oci_core_subnet" "subnet_internal_2" {
+  compartment_id             = var.compartment_id
+  vcn_id                     = oci_core_virtual_network.vcn_fw_main.id
+    ipv4cidr_blocks            = ["10.0.2.0/24"]
+  display_name               = "subnet-internal-2"
+  dns_label                  = "internal2"
+  prohibit_public_ip_on_vnic = true
+}
+
+# ファイアウォール用ARMインスタンス
+resource "oci_core_instance" "instance-20251213-ARM_fw" {
   compartment_id      = var.compartment_id
   availability_domain = var.availability_domain
 
-  display_name = "instance-20251213-ARM"
+  display_name = "instance-20251213-ARM_fw"
 
+  # プライマリVNIC - 外部向け
   create_vnic_details {
-    subnet_id        = oci_core_subnet.dev.id
+    subnet_id        = oci_core_subnet.subnet_public.id
     assign_public_ip = true
+    private_ip       = "10.0.0.10"
   }
 
   shape = "VM.Standard.A1.Flex"
@@ -47,7 +66,6 @@ resource "oci_core_instance" "existing_instance" {
     memory_in_gbs = 24
   }
 
-  # ARMインスタンス
   source_details {
     source_type             = "image"
     source_id               = "ocid1.image.oc1.ap-osaka-1.aaaaaaaatstm2fpjmgo3zqsgyfpmujr5vlrse7kkhfbkp4kfiyinmzuh72xa"
@@ -64,25 +82,49 @@ resource "oci_core_instance" "existing_instance" {
     network_type                        = "PARAVIRTUALIZED"
     remote_data_volume_type             = "PARAVIRTUALIZED"
     is_pv_encryption_in_transit_enabled = true
-    is_consistent_volume_naming_enabled = true  # これを追加
+    is_consistent_volume_naming_enabled = true
   }
 }
 
-# 2台目: AMDインスタンス（Always Free Micro）
-resource "oci_core_instance" "existing_instance1" {
+# セカンダリVNIC - 10.1.0.0/24 用（FWゲートウェイ）
+resource "oci_core_vnic_attachment" "instance-20251213-ARM_fw_vnic_internal1" {
+  instance_id  = oci_core_instance.instance-20251213-ARM_fw.id
+  display_name = "fw-internal-1"
+
+  create_vnic_details {
+    subnet_id        = oci_core_subnet.subnet_internal_1.id
+    assign_public_ip = false
+    private_ip       = "10.0.1.2"
+  }
+}
+
+# セカンダリVNIC - 10.2.0.0/24 用（FWゲートウェイ）
+resource "oci_core_vnic_attachment" "instance-20251213-ARM_fw_vnic_internal2" {
+  instance_id  = oci_core_instance.instance-20251213-ARM_fw.id
+  display_name = "fw-internal-2"
+
+  create_vnic_details {
+    subnet_id        = oci_core_subnet.subnet_internal_2.id
+    assign_public_ip = false
+    private_ip       = "10.0.2.2"
+  }
+}
+
+# AMDインスタンス - 10.1.0.0/24 ネットワーク
+resource "oci_core_instance" "amd_instance_internal1" {
   compartment_id      = var.compartment_id
   availability_domain = var.availability_domain
 
-  display_name = "instance-20251213-AMD1"
+  display_name = "amd-instance-internal1"
 
   create_vnic_details {
-    subnet_id        = oci_core_subnet.dev.id
-    assign_public_ip = true
+    subnet_id        = oci_core_subnet.subnet_internal_1.id
+    assign_public_ip = false
+    private_ip       = "10.0.1.100"
   }
 
   shape = "VM.Standard.E2.1.Micro"
 
-  # AMDインスタンス
   source_details {
     source_type             = "image"
     source_id               = "ocid1.image.oc1.ap-osaka-1.aaaaaaaan3hdtcxksx6at4azuusiyldtv6gcn2ev32pfqm72unn75eyb66sa"
@@ -98,28 +140,29 @@ resource "oci_core_instance" "existing_instance1" {
     firmware                            = "UEFI_64"
     network_type                        = "PARAVIRTUALIZED"
     remote_data_volume_type             = "PARAVIRTUALIZED"
-    is_pv_encryption_in_transit_enabled = true
-    is_consistent_volume_naming_enabled = true  # これを追加
+    is_pv_encryption_in_transit_enabled = false
+    is_consistent_volume_naming_enabled = true
   }
 }
 
-# 新規AMDインスタンス（existing_instance1と同じスペック）
-resource "oci_core_instance" "new_amd_instance" {
+# AMDインスタンス - 10.2.0.0/24 ネットワーク
+resource "oci_core_instance" "amd_instance_internal2" {
   compartment_id      = var.compartment_id
   availability_domain = var.availability_domain
 
-  display_name = "instance-20251213-AMD2"  # 任意の名前
+  display_name = "amd-instance-internal2"
 
   create_vnic_details {
-    subnet_id        = oci_core_subnet.dev.id
-    assign_public_ip = true
+    subnet_id        = oci_core_subnet.subnet_internal_2.id
+    assign_public_ip = false
+    private_ip       = "10.0.2.100"
   }
 
   shape = "VM.Standard.E2.1.Micro"
 
   source_details {
     source_type             = "image"
-    source_id               = "ocid1.image.oc1.ap-osaka-1.aaaaaaaan3hdtcxksx6at4azuusiyldtv6gcn2ev32pfqm72unn75eyb66sa"  # 現在のAMDと同じimage OCID
+    source_id               = "ocid1.image.oc1.ap-osaka-1.aaaaaaaan3hdtcxksx6at4azuusiyldtv6gcn2ev32pfqm72unn75eyb66sa"
     boot_volume_size_in_gbs = 50
   }
 
@@ -132,7 +175,7 @@ resource "oci_core_instance" "new_amd_instance" {
     firmware                            = "UEFI_64"
     network_type                        = "PARAVIRTUALIZED"
     remote_data_volume_type             = "PARAVIRTUALIZED"
-    is_pv_encryption_in_transit_enabled = true
+    is_pv_encryption_in_transit_enabled = false
     is_consistent_volume_naming_enabled = true
   }
 }
