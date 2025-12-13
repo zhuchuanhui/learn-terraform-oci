@@ -1,38 +1,3 @@
-# learn-terraform-oci プロジェクト README
-
-このプロジェクトは、Oracle Cloud Infrastructure (OCI) の無料枠（Always Free）で作成した  
-- 1つのVCN  
-- 1つのパブリックSubnet  
-- ARMインスタンス 1台 (VM.Standard.A1.Flex, 4 OCPU / 24GB)  
-- AMDインスタンス 2台 (VM.Standard.E2.1.Micro)  
-
-をTerraformで管理するための構成です。
-
-長期間のトラブルシューティングの結果、**VCNとSubnetはOCIコンソールで作成したものをそのまま使い、Terraformではインスタンスのみを管理**する形に落ち着きました。これが最も安定します。
-
-## 現在の構成概要
-
-- **VCN**: vcn-20240229-ubuntu22-test1 (CIDR: 10.0.0.0/16)
-- **Subnet**: subnet-20240229-ubuntu22-test1 (CIDR: 10.0.0.0/24, パブリック)
-- **インスタンス**:
-  - `existing_instance` : ARM (A1.Flex)
-  - `existing_instance1` : AMD Micro (元々の1台目)
-  - `new_amd_instance` : AMD Micro (新規追加)
-
-## ファイル構成
-
-```
-learn-terraform-oci/
-├── main.tf              # プロバイダー設定のみ
-├── variables.tf         # 変数宣言
-├── terraform.tfvars     # 実際の値（機密情報）
-├── instance.tf          # インスタンス定義（VCN/Subnetは管理外）
-└── README.md            # このファイル
-```
-
-
-
-
 # learn-terraform-oci プロジェクト README（ファイアウォール構成版）
 
 おめでとうございます！  
