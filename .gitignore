@@ -1,6 +1,5 @@
 .terraform
 .terraform.lock.hcl
-var_auth.tf
 terraform.tfstate
 terraform.tfstate.backup
 *.tfstate.*
