@@ -1,181 +1,129 @@
-# learn-terraform-oci プロジェクト README（ファイアウォール構成版）
+# learn-terraform-oci_2
 
-おめでとうございます！  
-これで**ARMインスタンスをファイアウォールとして使用した完全なネットワーク分離構成**がTerraformで作成完了しました。
+OCI上に、以下のネットワーク分離構成をTerraformで作成するリポジトリです。
 
-### 現在の構成概要
-- **VCN**: 10.0.0.0/16
-- **パブリックSubnet**: 10.0.0.0/24（外部アクセス可能）
-- **内部Subnet1**: 10.0.1.0/24（内部ネットワーク1）
-- **内部Subnet2**: 10.0.2.0/24（内部ネットワーク2）
+- VCN: `10.0.0.0/16`
+- Public Subnet: `10.0.0.0/24`
+- Internal Subnet 1: `10.0.1.0/24`
+- Internal Subnet 2: `10.0.2.0/24`
+- ARMインスタンス 1台（FW用途・3 VNIC）
+- AMDインスタンス 2台（内部サブネットに配置）
 
-### リソース一覧
-- **ARM FWインスタンス** (`instance-20251213-ARM_fw`)
-  - プライマリVNIC: 10.0.0.10（パブリックIPあり、外部アクセス用）
-  - セカンダリVNIC1: 10.0.1.2（内部ネットワーク1のゲートウェイ）
-  - セカンダリVNIC2: 10.0.2.2（内部ネットワーク2のゲートウェイ）
-- **AMDインスタンス1** (`amd_instance_internal1`)
-  - IP: 10.0.1.100（内部ネットワーク1）
-- **AMDインスタンス2** (`amd_instance_internal2`)
-  - IP: 10.0.2.100（内部ネットワーク2）
+## 構成
 
-### ネットワーク構成図（テキスト版）
+- `main.tf`
+  - OCI provider定義
+- `variables.tf`
+  - 入力変数定義
+- `instance.tf`
+  - ネットワーク（VCN/Subnet/IGW/Route/Security List）とインスタンス定義
+- `terraform.tfvars`
+  - 環境ごとの値（認証情報、コンパートメント、SSH鍵など）
 
-```
+## 作成される主なリソース
+
+- `oci_core_virtual_network.vcn_fw_main`
+- `oci_core_subnet.subnet_public`
+- `oci_core_subnet.subnet_internal_1`
+- `oci_core_subnet.subnet_internal_2`
+- `oci_core_internet_gateway.igw_public`
+- `oci_core_route_table.public_rt`
+- `oci_core_security_list.public_sl`
+- `oci_core_instance.instance-20251213-ARM_fw`
+- `oci_core_vnic_attachment.instance-20251213-ARM_fw_vnic_internal1`
+- `oci_core_vnic_attachment.instance-20251213-ARM_fw_vnic_internal2`
+- `oci_core_instance.amd_instance_internal1`
+- `oci_core_instance.amd_instance_internal2`
+
+## ネットワーク概要
+
+```text
 Internet
-   |
-   | (Public IP)
-   v
-+-----------------------------------+
-| ARM FW Instance                   |
-| (instance-20251213-ARM_fw)        |
-| - VNIC1: 10.0.0.10 (Public)       |
-| - VNIC2: 10.0.1.2 (Internal1 GW)  |
-| - VNIC3: 10.0.2.2 (Internal2 GW)  |
-+-----------------------------------+
-   |                 |
-   |                 |
-   v                 v
-+--------------------+          +--------------------+
-| Internal Subnet1   |          | Internal Subnet2   |
-| 10.0.1.0/24        |          | 10.0.2.0/24        |
-+--------------------+          +--------------------+
-   |                                      |
-   v                                      v
-+--------------------+          +--------------------+
-| AMD Instance1      |          | AMD Instance2      |
-| 10.0.1.100         |          | 10.0.2.100         |
-+--------------------+          +--------------------+
+  |
+  v
+[Public Subnet 10.0.0.0/24]
+  |- ARM FW (10.0.0.10, Public IPあり)
+      |- VNIC: 10.0.1.2 (Internal1側)
+      |- VNIC: 10.0.2.2 (Internal2側)
 
-すべて同一VCN (10.0.0.0/16) 内
-内部インスタンスは外部から直接アクセス不可 → FW経由のみ
+[Internal Subnet1 10.0.1.0/24]
+  |- AMD: 10.0.1.100 (Public IPなし)
+
+[Internal Subnet2 10.0.2.0/24]
+  |- AMD: 10.0.2.100 (Public IPなし)
 ```
 
-### SSH接続手順
+## 前提
 
-内部インスタンス（AMD）はパブリックIPを持っていないので、**ARM FW経由のSSHプロキシ**を使って接続します。
+- Terraform 1.x
+- OCIアカウント/権限
+- OCI API Key作成済み
+- 接続に使うSSH公開鍵
 
-#### 1. ARM FWインスタンスにSSH接続（外部から直接可能）
+## セットアップ
+
 ```bash
-ssh -i <your-private-key.pem> opc@<ARM_FW_PUBLIC_IP>
-```
-（<ARM_FW_PUBLIC_IP>はコンソールで確認）
-
-#### 2. ARM FWから内部AMDインスタンスにSSH接続
-ARM FWにログイン後：
-```bash
-# 内部ネットワーク1のAMDに接続
-ssh opc@10.0.1.100
-
-# 内部ネットワーク2のAMDに接続
-ssh opc@10.0.2.100
+git clone <this-repo>
+cd learn-terraform-oci_2
 ```
 
-#### 3. ローカルから内部AMDへ直接プロキシ接続（便利な方法）
-ローカルPCから1コマンドで内部インスタンスに接続：
-```bash
-# 内部ネットワーク1のAMD
-ssh -i <your-private-key.pem> -J opc@<ARM_FW_PUBLIC_IP> opc@10.0.1.100
+`terraform.tfvars` を用意し、少なくとも以下を設定してください。
 
-# 内部ネットワーク2のAMD
-ssh -i <your-private-key.pem> -J opc@<ARM_FW_PUBLIC_IP> opc@10.0.2.100
-```
-
-#### 4. SSHキー設定確認
-すべてのインスタンスに同じSSH公開キーが設定されているので、同一キーで接続可能です。
-
-### 今後の運用
-- **インスタンス追加/削除**: `instance.tf` を編集 → `terraform apply`
-- **ファイアウォール設定**: ARM FWにpfSense/OPNsenseやiptables/nftablesをインストールしてトラフィック制御
-- **ルーティング設定**: 内部インスタンスのデフォルトルートをFWのIPに向ける（必要に応じて）
-
-これで**完全に分離された安全なネットワーク構成**が完成しました！  
-お疲れ様でした！！  
-何か追加の設定（Route Table, Security Listなど）が必要でしたら教えてくださいね。
-## 使い方（誰でも修正・追加できるように）
-
-### 1. 事前準備
-- OCIアカウントでAPIキーを作成済み
-- `~/.ssh/id_rsa.pub` にSSH公開キーがある
-- OCIコンソールで以下のリソースが作成済み（このプロジェクトではTerraformで管理しません）
-  - VCN: vcn-20240229-ubuntu22-test1
-  - Subnet: subnet-20240229-ubuntu22-test1 (パブリック)
-
-### 2. セットアップ
-```bash
-git clone <このリポジトリ>
-cd learn-terraform-oci
-
-# 変数値を設定（terraform.tfvarsを編集）
-cp terraform.tfvars.example terraform.tfvars
-# エディタで開いて値を埋める
-
-terraform init
-```
-
-### 3. インスタンス作成・変更
-```bash
-terraform plan    # 変更内容を確認
-terraform apply   # yes と入力
-```
-
-### 4. 新しいインスタンスを追加したい場合
-`instance.tf` に新しいリソースブロックをコピーして追加してください。
-
-例：もう1台AMD Microを追加したい場合
 ```hcl
-resource "oci_core_instance" "another_amd_instance" {
-  compartment_id      = var.compartment_id
-  availability_domain = var.availability_domain
-
-  display_name = "another-amd-instance"
-
-  create_vnic_details {
-    subnet_id        = "ocid1.subnet.oc1.ap-osaka-1.aaaaaaaa4sbehj6px5z3eevg452jt3mjzrgkcxjqvnjt6vjpfotvnj3ftebq"  # 固定（コンソールのSubnet OCID）
-    assign_public_ip = true
-  }
-
-  shape = "VM.Standard.E2.1.Micro"
-
-  source_details {
-    source_type             = "image"
-    source_id               = "ocid1.image.oc1.ap-osaka-1.aaaaaaaan3hdtcxksx6at4azuusiyldtv6gcn2ev32pfqm72unn75eyb66sa"  # AMD用image OCID
-    boot_volume_size_in_gbs = 50
-  }
-
-  metadata = {
-    ssh_authorized_keys = var.ssh_public_key
-  }
-
-  launch_options {
-    boot_volume_type                    = "PARAVIRTUALIZED"
-    firmware                            = "UEFI_64"
-    network_type                        = "PARAVIRTUALIZED"
-    remote_data_volume_type             = "PARAVIRTUALIZED"
-    is_pv_encryption_in_transit_enabled = true
-    is_consistent_volume_naming_enabled = true
-  }
-}
+tenancy_ocid        = "ocid1.tenancy..."
+compartment_id      = "ocid1.compartment..."
+user_ocid           = "ocid1.user..."
+fingerprint         = "xx:xx:xx:..."
+private_key_path    = "~/.oci/oci_api_key.pem"
+region              = "ap-osaka-1"
+availability_domain = "ZXGQ:AP-OSAKA-1-AD-1"
+ssh_public_key      = "ssh-rsa AAAA..."
 ```
 
-変更後：
+## 実行手順
+
 ```bash
+terraform init
 terraform plan
 terraform apply
 ```
 
-### 5. インスタンスを削除したい場合
-`instance.tf` から該当ブロックを削除 or コメントアウトしてapply。
+削除する場合:
 
-### 6. 注意点
-- **VCNとSubnetは絶対にTerraformで管理しない**（過去にトラブル多発）
-- Subnet OCIDとimage OCIDは固定でハードコードしています
-- 機密情報（tenancy_ocid, user_ocid, fingerprint, private_key_path, ssh_public_key）は`terraform.tfvars`に記載
-- `.gitignore`に`terraform.tfvars`と`.terraform*`を追加推奨
+```bash
+terraform destroy
+```
 
-### 7. トラブルシューティング
-- `terraform plan` でreplaceが多く出る → `terraform state rm <resource>` で古いstateを削除して再import
-- エラーでapply中断 → stateバックアップを取ってからstate rmでクリーンアップ
+## SSH接続
 
-これで誰でも安全にインスタンスを追加・削除・管理できます！  
-お疲れ様でした。この構成で安定運用してください。
+1. ARM FWへ接続
+
+```bash
+ssh -i <private-key.pem> opc@<ARM_FW_PUBLIC_IP>
+```
+
+2. ARM FW経由で内部AMDへ接続
+
+```bash
+# Internal1
+ssh -i <private-key.pem> -J opc@<ARM_FW_PUBLIC_IP> opc@10.0.1.100
+
+# Internal2
+ssh -i <private-key.pem> -J opc@<ARM_FW_PUBLIC_IP> opc@10.0.2.100
+```
+
+## 実装上の注意
+
+- このリポジトリは **VCN/Subnet/IGW/Route Table/Security List もTerraformで管理** します。
+- `instance.tf` には以下がハードコードされています。
+  - CIDR
+  - 各インスタンスの固定Private IP
+  - `source_id`（イメージOCID）
+  - インスタンスshape/volumeサイズ
+- 環境差分がある場合は `instance.tf` を編集してください。
+
+## 変更時の目安
+
+- インスタンス追加/削除: `instance.tf` を編集して `terraform plan/apply`
+- 変数追加: `variables.tf` と `terraform.tfvars` を更新
+- provider設定変更: `main.tf` を更新
