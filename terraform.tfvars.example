@@ -1,0 +1,16 @@
+# =============================================================================
+# terraform.tfvars
+# 目的: 変数に実際の値を設定するファイル（機密情報はここに記載）
+# 注意: このファイルはGitにコミットしないことを推奨（.gitignoreに追加）
+# =============================================================================
+
+tenancy_ocid     = "ocid1.tenancy.oc1..OCIコンソールより追加"
+compartment_id   = "ocid1.tenancy.oc1..OCIコンソールより追加"
+region           = "ap-osaka-1"
+user_ocid        = "ocid1.user.oc1..OCIコンソールより追加"
+fingerprint      = "OCIコンソールより追加"
+private_key_path = "ブラベートキーのパス（例: ~/.oci/oci_api_key.pem）"
+availability_domain = "ZXGQ:AP-OSAKA-1-AD-1"
+
+# SSH公開キーをここに貼り付けてください（例: cat ~/.ssh/id_rsa.pub の内容）
+ssh_public_key = "ssh-rsa 確認後に貼り付けてください"
