@@ -46,3 +46,29 @@ variable "availability_domain" {
   type        = string
   default     = "ZXGQ:AP-OSAKA-1-AD-1"
 }
+
+# Image OCIDs (set these in terraform.tfvars to Oracle Linux 9 images for your region)
+variable "image_ocid_oracle9_arm" {
+  description = "ARM用 Oracle Linux 9 イメージ OCID (ap-osaka-1)"
+  type        = string
+  default     = ""
+}
+
+variable "image_ocid_oracle9_amd" {
+  description = "AMD用 Oracle Linux 9 イメージ OCID (ap-osaka-1)"
+  type        = string
+  default     = ""
+}
+
+# Image OCIDs for Oracle Linux 10
+variable "image_ocid_oracle10_arm" {
+  description = "ARM用 Oracle Linux 10 イメージ OCID (ap-osaka-1)"
+  type        = string
+  default     = ""
+}
+
+variable "image_ocid_oracle10_amd" {
+  description = "AMD用 Oracle Linux 10 イメージ OCID (ap-osaka-1)"
+  type        = string
+  default     = ""
+}

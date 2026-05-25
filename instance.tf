@@ -38,7 +38,8 @@ resource "oci_core_route_table" "public_rt" {
   display_name = "public-rt"
 
   route_rules {
-    cidr_block = "0.0.0.0/0"
+    destination = "0.0.0.0/0"
+    destination_type = "CIDR_BLOCK"
     network_entity_id = oci_core_internet_gateway.igw_public.id
   }
 }
@@ -85,10 +86,10 @@ resource "oci_core_subnet" "subnet_internal_2" {
   prohibit_public_ip_on_vnic = true
 }
 # ファイアウォール用ARMインスタンス
-resource "oci_core_instance" "instance-20251213-ARM_fw" {
+resource "oci_core_instance" "arm-instance_fw" {
   compartment_id = var.compartment_id
   availability_domain = var.availability_domain
-  display_name = "instance-20251213-ARM_fw"
+  display_name = "arm-instance_fw"
   # プライマリVNIC - 外部向け
   create_vnic_details {
     subnet_id = oci_core_subnet.subnet_public.id
@@ -103,7 +104,7 @@ resource "oci_core_instance" "instance-20251213-ARM_fw" {
   # ARMインスタンス
   source_details {
     source_type = "image"
-    source_id = "ocid1.image.oc1.ap-osaka-1.aaaaaaaatstm2fpjmgo3zqsgyfpmujr5vlrse7kkhfbkp4kfiyinmzuh72xa"
+    source_id = var.image_ocid_oracle10_arm
     boot_volume_size_in_gbs = 100
   }
   metadata = {
@@ -114,13 +115,12 @@ resource "oci_core_instance" "instance-20251213-ARM_fw" {
     firmware = "UEFI_64"
     network_type = "PARAVIRTUALIZED"
     remote_data_volume_type = "PARAVIRTUALIZED"
-    is_pv_encryption_in_transit_enabled = true
     is_consistent_volume_naming_enabled = true # これを追加
   }
 }
 # セカンダリVNIC - 10.1.0.0/24 用（FWゲートウェイ）
-resource "oci_core_vnic_attachment" "instance-20251213-ARM_fw_vnic_internal1" {
-  instance_id = oci_core_instance.instance-20251213-ARM_fw.id
+resource "oci_core_vnic_attachment" "arm-instance_fw_vnic_internal1" {
+  instance_id = oci_core_instance.arm-instance_fw.id
   display_name = "fw-internal-1"
   create_vnic_details {
     subnet_id = oci_core_subnet.subnet_internal_1.id
@@ -129,8 +129,8 @@ resource "oci_core_vnic_attachment" "instance-20251213-ARM_fw_vnic_internal1" {
   }
 }
 # セカンダリVNIC - 10.2.0.0/24 用（FWゲートウェイ）
-resource "oci_core_vnic_attachment" "instance-20251213-ARM_fw_vnic_internal2" {
-  instance_id = oci_core_instance.instance-20251213-ARM_fw.id
+resource "oci_core_vnic_attachment" "arm-instance_fw_vnic_internal2" {
+  instance_id = oci_core_instance.arm-instance_fw.id
   display_name = "fw-internal-2"
   create_vnic_details {
     subnet_id = oci_core_subnet.subnet_internal_2.id
@@ -151,7 +151,7 @@ resource "oci_core_instance" "amd_instance_internal1" {
   shape = "VM.Standard.E2.1.Micro"
   source_details {
     source_type = "image"
-    source_id = "ocid1.image.oc1.ap-osaka-1.aaaaaaaan3hdtcxksx6at4azuusiyldtv6gcn2ev32pfqm72unn75eyb66sa"
+    source_id = var.image_ocid_oracle10_amd
     boot_volume_size_in_gbs = 50
   }
   metadata = {
@@ -162,7 +162,6 @@ resource "oci_core_instance" "amd_instance_internal1" {
     firmware = "UEFI_64"
     network_type = "PARAVIRTUALIZED"
     remote_data_volume_type = "PARAVIRTUALIZED"
-    is_pv_encryption_in_transit_enabled = false  # 実際のインスタンスと整合させる
     is_consistent_volume_naming_enabled = true
   }
 }
@@ -179,7 +178,7 @@ resource "oci_core_instance" "amd_instance_internal2" {
   shape = "VM.Standard.E2.1.Micro"
   source_details {
     source_type = "image"
-    source_id = "ocid1.image.oc1.ap-osaka-1.aaaaaaaan3hdtcxksx6at4azuusiyldtv6gcn2ev32pfqm72unn75eyb66sa"
+    source_id = var.image_ocid_oracle10_amd
     boot_volume_size_in_gbs = 50
   }
   metadata = {
@@ -190,7 +189,6 @@ resource "oci_core_instance" "amd_instance_internal2" {
     firmware = "UEFI_64"
     network_type = "PARAVIRTUALIZED"
     remote_data_volume_type = "PARAVIRTUALIZED"
-    is_pv_encryption_in_transit_enabled = false  # 実際のインスタンスと整合させる
     is_consistent_volume_naming_enabled = true
   }
 }

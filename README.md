@@ -93,3 +93,104 @@ ssh -i <private-key.pem> -J opc@<ARM_FW_PUBLIC_IP> opc@10.0.2.100
 - インスタンス追加/削除: `instance.tf` を編集して `terraform plan/apply`
 - 変数追加: `variables.tf` と `terraform.tfvars` を更新
 - provider設定変更: `main.tf` を更新
+
+## トラブルシューティング
+
+### 発生した問題（要約）
+- `terraform apply` 実行時に以下のエラーが発生しました。
+  - `Invalid Instance is invalid for this update. Instances must have no more than one secondary vnic and one secondary volume.`
+  - `Overriding PvEncryptionInTransitEnabled in LaunchOptions is not supported`
+  - provider からの警告: `cidr_block` フィールドが非推奨（route table）
+
+### 原因
+- `launch_options` に `is_pv_encryption_in_transit_enabled` を明示的に設定していたため、インスタンス作成/更新APIが拒否しました（このオプションは上書き不可／プロバイダー側で制御される場合があります）。
+- 既存の ARM インスタンスに対して行った更新で、インスタンスが許容するセカンダリVNIC/ボリューム数を超える変更を試みたため、更新が失敗しました。
+- また、古い属性名（`cidr_block`）を使っている箇所があり、警告が出ていました。
+
+### 対処内容（リポジトリで行った変更）
+- `instance.tf` の `launch_options` から `is_pv_encryption_in_transit_enabled` を削除しました。
+- `oci_core_route_table.public_rt` の `cidr_block` を `destination` に置き換えました（非推奨対応）。
+- 既存インスタンスを更新する際は、セカンダリVNIC/ボリュームの数に注意するようにしました。
+
+### 再発防止と確認手順
+1. 変更前に `terraform plan` を必ず確認する:
+
+```bash
+terraform init
+terraform plan
+```
+
+2. `launch_options` に関連する設定は OCI API の制約があるため、ドキュメントを参照し、不明なオプションは指定しない。
+
+3. 既存インスタンスの大幅な変更（VNIC追加など）は、一度 `terraform destroy` して再作成するか、手動でVNICを管理してから行う。
+
+4. Providerのバージョン警告が出た場合は、`main.tf` の `required_providers` を見直し、必要ならローカルでプロバイダをアップグレードする:
+
+```bash
+terraform init -upgrade
+```
+
+5. 状況確認コマンド:
+
+```bash
+terraform state list
+terraform show
+```
+
+### 参考リンク
+- OCI Terraform Provider (docs): https://registry.terraform.io/providers/oracle/oci
+- OCI API: https://docs.oracle.com/iaas/api/
+
+もしこの README に追加してほしい試験手順やスクリーンショットがあれば教えてください。
+
+## Oracle Linux 9 (oracle9) への切替手順
+1. OCI コンソールか CLI で、`ap-osaka-1` リージョンの Oracle Linux 9 イメージ OCID を取得します。CLI 例:
+
+```bash
+# OCI CLI: 画像一覧から oracle linux 9 をフィルタ
+oci compute image list --compartment-id ${TENANCY_OCID} --all --query "data[?contains("display-name", 'Oracle-Linux-9') || contains("display-name", 'Oracle Linux 9')].{id:id,displayName:"display-name"}"
+```
+
+2. 取得した OCID を `terraform.tfvars` の以下に設定してください:
+
+```hcl
+image_ocid_oracle9_arm = "ocid1.image.oc1.ap-osaka-1...."   # ARM 用がある場合
+image_ocid_oracle9_amd = "ocid1.image.oc1.ap-osaka-1...."   # AMD/x86 用
+```
+
+3. 設定反映と全作成手順（すべて再作成したい場合）:
+
+```bash
+cd learn-terraform-oci
+terraform init
+terraform destroy -auto-approve
+terraform apply -auto-approve
+```
+
+注意: `destroy` を行うと既存リソースは完全に削除されます。必要なバックアップや確認を行ってから実行してください。
+
+## Oracle Linux 10 (oracle10) への切替手順
+1. OCI コンソールか CLI で、`ap-osaka-1` リージョンの Oracle Linux 10 イメージ OCID を取得します。CLI 例:
+
+```bash
+# OCI CLI: 画像一覧から oracle linux 10 をフィルタ
+oci compute image list --compartment-id ${TENANCY_OCID} --all --query "data[?contains(\"display-name\", 'Oracle-Linux-10') || contains(\"display-name\", 'Oracle Linux 10')].{id:id,displayName:\"display-name\"}"
+```
+
+2. 取得した OCID を `terraform.tfvars` の以下に設定してください:
+
+```hcl
+image_ocid_oracle10_arm = "ocid1.image.oc1.ap-osaka-1...."   # ARM 用がある場合
+image_ocid_oracle10_amd = "ocid1.image.oc1.ap-osaka-1...."   # AMD/x86 用
+```
+
+3. 設定反映と全作成手順（すべて再作成したい場合）:
+
+```bash
+cd learn-terraform-oci
+terraform init
+terraform destroy -auto-approve
+terraform apply -auto-approve
+```
+
+注意: `destroy` を行うと既存リソースは完全に削除されます。必要なバックアップや確認を行ってから実行してください。
