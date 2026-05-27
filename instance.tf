@@ -10,7 +10,7 @@
 resource "oci_core_virtual_network" "vcn_fw_main" {
   compartment_id = var.compartment_id
   cidr_block = "10.0.0.0/16"
-  display_name = "vcn-fw-main-20251214"
+  display_name = "vcn-fw-main"
   dns_label = "vcfwmain"
 }
 # パブリックSubnet（外部向け）
@@ -44,7 +44,7 @@ resource "oci_core_route_table" "public_rt" {
   }
 }
 
-// Security List for public subnet: allow SSH ingress
+// Security List for public subnet: allow SSH ingress and AWX/Kubernetes ports
 resource "oci_core_security_list" "public_sl" {
   compartment_id = var.compartment_id
   vcn_id = oci_core_virtual_network.vcn_fw_main.id
@@ -56,6 +56,60 @@ resource "oci_core_security_list" "public_sl" {
     tcp_options {
       min = 22
       max = 22
+    }
+  }
+
+  ingress_security_rules {
+    protocol = "6"
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 6443
+      max = 6443
+    }
+  }
+
+  ingress_security_rules {
+    protocol = "6"
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 2379
+      max = 2380
+    }
+  }
+
+  ingress_security_rules {
+    protocol = "6"
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 10250
+      max = 10250
+    }
+  }
+
+  ingress_security_rules {
+    protocol = "6"
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 10259
+      max = 10259
+    }
+  }
+
+  ingress_security_rules {
+    protocol = "6"
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 10257
+      max = 10257
+    }
+  }
+
+  ingress_security_rules {
+    protocol = "6"
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 30080
+      max = 30080
     }
   }
 

@@ -8,7 +8,7 @@ OCI上に、ARMをFW用途に置いた分離ネットワーク構成をTerraform
 - Public Subnet: `10.0.0.0/24`
 - Internal Subnet 1: `10.0.1.0/24`
 - Internal Subnet 2: `10.0.2.0/24`
-- ARM FWインスタンス: `instance-20251213-ARM_fw`
+- ARM FWインスタンス: `arm-instance_fw`
   - Public: `10.0.0.10`（Public IPあり）
   - Internal1側: `10.0.1.2`
   - Internal2側: `10.0.2.2`
